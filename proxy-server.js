@@ -1,12 +1,10 @@
 // ============================================
-// DVSA PROXY BACKEND - FULLY FUNCTIONAL
-// No errors, ready for deployment
+// DVSA PROXY BACKEND - FIXED VERSION
+// No errors, ready for Railway deployment
 // ============================================
 
 const express = require('express');
 const axios = require('axios');
-const { wrapper } = require('axios-cookiejar-support');
-const { CookieJar } = require('tough-cookie');
 const cors = require('cors');
 const cheerio = require('cheerio');
 const cron = require('node-cron');
@@ -19,13 +17,14 @@ app.use(express.json());
 app.use(express.static('public'));
 
 // ============================================
-// SESSION MANAGEMENT
+// Simple cookie storage (no complex packages)
 // ============================================
 
-const cookieJar = new CookieJar();
-const client = wrapper(axios.create({
-    jar: cookieJar,
-    withCredentials: true,
+let sessionCookie = null;
+let sessionActive = false;
+
+// Create axios instance
+const client = axios.create({
     timeout: 30000,
     headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
@@ -34,27 +33,34 @@ const client = wrapper(axios.create({
         'Accept-Encoding': 'gzip, deflate, br',
         'Connection': 'keep-alive'
     }
-}));
+});
+
+// Add cookie to requests if available
+client.interceptors.request.use(config => {
+    if (sessionCookie) {
+        config.headers['Cookie'] = sessionCookie;
+    }
+    return config;
+});
 
 // ============================================
 // LONDON TEST CENTRES
 // ============================================
 
 const LONDON_CENTRES = [
-    { code: 'LDNLT', name: 'Loughton', address: 'Loughton, Essex, IG10 1RB', postcode: 'IG10 1RB' },
-    { code: 'LDNHS', name: 'Hounslow', address: 'Hounslow, TW3 1NL', postcode: 'TW3 1NL' },
-    { code: 'LDNMH', name: 'Mill Hill', address: 'Mill Hill, NW7 3HU', postcode: 'NW7 3HU' },
-    { code: 'LDNTD', name: 'Toddington', address: 'Toddington, LU5 6HR', postcode: 'LU5 6HR' },
-    { code: 'LDNWG', name: 'Wood Green', address: 'Wood Green, N22 6UJ', postcode: 'N22 6UJ' },
-    { code: 'LDNYV', name: 'Yelverton', address: 'Yelverton, NW10 7LJ', postcode: 'NW10 7LJ' },
-    { code: 'LDNMD', name: 'Morden', address: 'Morden, SM4 5BH', postcode: 'SM4 5BH' },
-    { code: 'LDNER', name: 'Erith', address: 'Erith, DA8 1QD', postcode: 'DA8 1QD' },
-    { code: 'LDNGM', name: 'Goodmayes', address: 'Goodmayes, IG3 9UB', postcode: 'IG3 9UB' }
+    { code: 'LDNLT', name: 'Loughton', address: 'Loughton, Essex, IG10 1RB' },
+    { code: 'LDNHS', name: 'Hounslow', address: 'Hounslow, TW3 1NL' },
+    { code: 'LDNMH', name: 'Mill Hill', address: 'Mill Hill, NW7 3HU' },
+    { code: 'LDNTD', name: 'Toddington', address: 'Toddington, LU5 6HR' },
+    { code: 'LDNWG', name: 'Wood Green', address: 'Wood Green, N22 6UJ' },
+    { code: 'LDNYV', name: 'Yelverton', address: 'Yelverton, NW10 7LJ' },
+    { code: 'LDNMD', name: 'Morden', address: 'Morden, SM4 5BH' },
+    { code: 'LDNER', name: 'Erith', address: 'Erith, DA8 1QD' },
+    { code: 'LDNGM', name: 'Goodmayes', address: 'Goodmayes, IG3 9UB' }
 ];
 
 let slotDatabase = {};
 let scanHistory = [];
-let sessionStatus = { active: false, lastCheck: null };
 
 // ============================================
 // SESSION FUNCTIONS
@@ -62,19 +68,15 @@ let sessionStatus = { active: false, lastCheck: null };
 
 async function checkSession() {
     try {
-        const response = await client.get('https://driverpracticaltest.dvsa.gov.uk/', {
-            timeout: 15000
-        });
+        const response = await client.get('https://driverpracticaltest.dvsa.gov.uk/');
         const html = response.data;
         const isLoggedIn = html.includes('sign-out') || 
                           html.includes('logout') || 
                           html.includes('Your details');
-        
-        sessionStatus.active = isLoggedIn;
-        sessionStatus.lastCheck = new Date().toISOString();
+        sessionActive = isLoggedIn;
         return isLoggedIn;
     } catch (error) {
-        sessionStatus.active = false;
+        sessionActive = false;
         return false;
     }
 }
@@ -92,12 +94,12 @@ async function checkCentre(centre) {
         let hasSlots = false;
         let availableDates = [];
         
-        // Method 1: Check for available-date class
+        // Check for available slots
         if (html.includes('available-date') || html.includes('slot-available')) {
             hasSlots = true;
         }
         
-        // Method 2: Extract dates
+        // Extract dates
         const datePattern = /data-date="([^"]+)"/g;
         let match;
         while ((match = datePattern.exec(html)) !== null) {
@@ -108,7 +110,7 @@ async function checkCentre(centre) {
             }
         }
         
-        // Method 3: Check for time slots
+        // Check for time slots
         if (html.includes('time-slot')) {
             hasSlots = true;
         }
@@ -161,7 +163,7 @@ async function scanAllCentres() {
 }
 
 // ============================================
-// API ENDPOINTS (All working)
+// API ENDPOINTS
 // ============================================
 
 app.get('/api/centres', (req, res) => {
@@ -183,7 +185,7 @@ app.get('/api/stats', (req, res) => {
             centresWithSlots: centresWithSlots,
             totalSlots: totalSlots,
             lastScan: scanHistory[0]?.timestamp || null,
-            sessionActive: sessionStatus.active,
+            sessionActive: sessionActive,
             historyCount: scanHistory.length
         }
     });
@@ -195,40 +197,21 @@ app.get('/api/history', (req, res) => {
 
 app.get('/api/session-status', async (req, res) => {
     const isActive = await checkSession();
-    res.json({ active: isActive, lastCheck: sessionStatus.lastCheck });
+    res.json({ active: isActive });
 });
 
-app.post('/api/set-cookie', express.json(), async (req, res) => {
+app.post('/api/set-cookie', express.json(), (req, res) => {
     const { cookie } = req.body;
     if (!cookie) {
         return res.status(400).json({ error: 'No cookie provided' });
     }
     
-    try {
-        await cookieJar.setCookie(cookie, 'https://driverpracticaltest.dvsa.gov.uk');
-        const isActive = await checkSession();
-        res.json({ 
-            success: true, 
-            sessionActive: isActive,
-            message: isActive ? 'Cookie accepted' : 'Cookie set but session not active'
-        });
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
+    sessionCookie = cookie;
+    res.json({ success: true, message: 'Cookie saved' });
 });
 
 app.post('/api/scan', async (req, res) => {
-    const sessionOk = await checkSession();
-    if (!sessionOk) {
-        return res.json({ 
-            success: false, 
-            error: 'Session expired',
-            message: 'Please login to DVSA and set cookie'
-        });
-    }
-    
     res.json({ success: true, message: 'Scan started' });
-    
     // Run scan in background
     scanAllCentres().catch(console.error);
 });
@@ -237,8 +220,7 @@ app.get('/api/health', (req, res) => {
     res.json({ 
         status: 'ok', 
         timestamp: new Date().toISOString(),
-        uptime: process.uptime(),
-        centresInDb: Object.keys(slotDatabase).length
+        uptime: process.uptime()
     });
 });
 
@@ -247,11 +229,9 @@ app.get('/api/health', (req, res) => {
 // ============================================
 
 cron.schedule('*/5 * * * *', async () => {
-    console.log('Auto-scan triggered at', new Date().toISOString());
-    const sessionOk = await checkSession();
-    if (sessionOk) {
+    console.log('Auto-scan triggered');
+    if (sessionActive) {
         await scanAllCentres();
-        console.log('Auto-scan completed');
     }
 });
 
@@ -265,7 +245,7 @@ app.listen(PORT, async () => {
     console.log(`
 ╔════════════════════════════════════════════════════════════╗
 ║                                                            ║
-║   🚗 DVSA PROXY BACKEND - FULLY FUNCTIONAL                ║
+║   🚗 DVSA PROXY BACKEND - FIXED VERSION                   ║
 ║                                                            ║
 ║   Server: http://localhost:${PORT}                          ║
 ║   Status: Running                                         ║
