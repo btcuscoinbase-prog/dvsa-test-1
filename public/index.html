@@ -3,101 +3,389 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DVSA Proxy Monitor - London Slots</title>
+    <title>DVSA London Slot Monitor</title>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: Arial, sans-serif; background: #f3f2f1; padding: 20px; }
-        .container { max-width: 1200px; margin: auto; }
-        .header { background: #005ea5; color: white; padding: 20px; border-radius: 12px; margin-bottom: 20px; text-align: center; }
-        .header h1 { font-size: 24px; margin-bottom: 5px; }
-        .session-card { background: white; border-radius: 12px; padding: 15px; margin-bottom: 20px; border-left: 4px solid; }
-        .session-card.active { border-left-color: #00703c; background: #e6f4ea; }
-        .session-card.inactive { border-left-color: #d4351c; background: #fce8e6; }
-        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-bottom: 20px; }
-        .stat-card { background: white; border-radius: 12px; padding: 15px; text-align: center; }
-        .stat-value { font-size: 28px; font-weight: bold; color: #005ea5; }
-        .stat-label { font-size: 12px; color: #666; margin-top: 5px; }
-        .controls { display: flex; gap: 10px; justify-content: center; margin-bottom: 20px; flex-wrap: wrap; }
-        .btn { padding: 10px 20px; border: none; border-radius: 8px; font-size: 14px; font-weight: bold; cursor: pointer; }
-        .btn-primary { background: #00703c; color: white; }
-        .btn-secondary { background: #6f777b; color: white; }
-        .centres-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 15px; margin-bottom: 20px; }
-        .centre-card { background: white; border-radius: 12px; overflow: hidden; }
-        .centre-card.has-slots { border-left: 4px solid #00703c; }
-        .centre-header { padding: 15px; background: #f8f9fa; display: flex; justify-content: space-between; }
-        .centre-name { font-weight: bold; }
-        .slot-badge { padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: bold; }
-        .slot-badge.available { background: #00703c; color: white; }
-        .slot-badge.unavailable { background: #6f777b; color: white; }
-        .centre-body { padding: 15px; }
-        .centre-address { font-size: 12px; color: #666; margin-bottom: 10px; }
-        .dates-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
-        .date-chip { background: #e6f4ea; color: #00703c; padding: 4px 10px; border-radius: 15px; font-size: 11px; }
-        .log-panel { background: #1a1a2e; color: #0f0; font-family: monospace; font-size: 11px; padding: 15px; border-radius: 12px; max-height: 150px; overflow-y: auto; }
-        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center; }
-        .modal-content { background: white; border-radius: 12px; padding: 20px; max-width: 500px; width: 90%; }
-        .modal textarea { width: 100%; height: 80px; margin: 15px 0; padding: 10px; font-family: monospace; }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+            background: #f0f2f5;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1300px;
+            margin: 0 auto;
+        }
+        
+        /* Header */
+        .header {
+            background: linear-gradient(135deg, #005ea5 0%, #003d6b 100%);
+            color: white;
+            padding: 25px;
+            border-radius: 16px;
+            margin-bottom: 25px;
+            text-align: center;
+        }
+        .header h1 {
+            font-size: 28px;
+            margin-bottom: 8px;
+        }
+        .header p {
+            opacity: 0.9;
+            font-size: 14px;
+        }
+        
+        /* Session Card */
+        .session-card {
+            background: white;
+            border-radius: 12px;
+            padding: 15px 20px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+            border-left: 4px solid;
+        }
+        .session-card.active {
+            border-left-color: #00703c;
+            background: #e6f4ea;
+        }
+        .session-card.inactive {
+            border-left-color: #d4351c;
+            background: #fce8e6;
+        }
+        .session-title {
+            font-weight: bold;
+            font-size: 16px;
+        }
+        .session-status {
+            font-size: 13px;
+        }
+        .session-btn {
+            background: #005ea5;
+            color: white;
+            border: none;
+            padding: 6px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 15px;
+            margin-bottom: 25px;
+        }
+        .stat-card {
+            background: white;
+            border-radius: 12px;
+            padding: 18px;
+            text-align: center;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .stat-value {
+            font-size: 32px;
+            font-weight: bold;
+            color: #005ea5;
+        }
+        .stat-label {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+        }
+        
+        /* Controls */
+        .controls {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            margin-bottom: 25px;
+            flex-wrap: wrap;
+        }
+        .btn {
+            padding: 12px 28px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-primary {
+            background: #00703c;
+            color: white;
+        }
+        .btn-primary:hover {
+            background: #004d29;
+            transform: translateY(-1px);
+        }
+        .btn-secondary {
+            background: #6f777b;
+            color: white;
+        }
+        .btn-secondary:hover {
+            background: #505a5f;
+        }
+        
+        /* Centres Grid */
+        .centres-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+            gap: 18px;
+            margin-bottom: 25px;
+        }
+        .centre-card {
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            transition: transform 0.2s;
+        }
+        .centre-card:hover {
+            transform: translateY(-2px);
+        }
+        .centre-card.has-slots {
+            border-left: 4px solid #00703c;
+        }
+        .centre-header {
+            padding: 15px;
+            background: #f8f9fa;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .centre-name {
+            font-weight: bold;
+            font-size: 16px;
+        }
+        .slot-badge {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: bold;
+        }
+        .slot-badge.available {
+            background: #00703c;
+            color: white;
+        }
+        .slot-badge.unavailable {
+            background: #6f777b;
+            color: white;
+        }
+        .centre-body {
+            padding: 15px;
+        }
+        .centre-address {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 12px;
+        }
+        .dates-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 10px;
+        }
+        .date-chip {
+            background: #e6f4ea;
+            color: #00703c;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .date-chip:hover {
+            background: #00703c;
+            color: white;
+        }
+        .last-check {
+            font-size: 10px;
+            color: #999;
+            margin-top: 12px;
+            text-align: right;
+        }
+        
+        /* Log Panel */
+        .log-panel {
+            background: #1a1a2e;
+            color: #0f0;
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+            padding: 15px;
+            border-radius: 12px;
+            max-height: 160px;
+            overflow-y: auto;
+        }
+        .log-entry {
+            padding: 4px 0;
+            border-bottom: 1px solid #333;
+        }
+        .log-entry.found {
+            color: #ff6600;
+            font-weight: bold;
+        }
+        
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+        .modal-content {
+            background: white;
+            border-radius: 16px;
+            padding: 25px;
+            max-width: 500px;
+            width: 90%;
+        }
+        .modal-content h3 {
+            margin-bottom: 15px;
+            color: #005ea5;
+        }
+        .modal-content p {
+            margin: 10px 0;
+            font-size: 13px;
+        }
+        .modal-content code {
+            background: #f0f2f5;
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+        .modal textarea {
+            width: 100%;
+            height: 100px;
+            margin: 15px 0;
+            padding: 10px;
+            font-family: monospace;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+        }
+        .modal-buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+        }
+        
         @media (max-width: 700px) {
-            .centres-grid { grid-template-columns: 1fr; }
+            .centres-grid {
+                grid-template-columns: 1fr;
+            }
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            .header h1 {
+                font-size: 22px;
+            }
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
         }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1>🚗 DVSA Proxy Monitor - London Slots</h1>
-            <p>Real session management | Auto-scan every 5 minutes</p>
+            <h1>🚗 DVSA London Slot Monitor</h1>
+            <p>Live tracking | 9 London test centres | Real-time availability</p>
         </div>
 
         <div class="session-card inactive" id="sessionCard">
-            <div class="session-title">🔐 Session Status</div>
-            <div class="session-status" id="sessionStatus">Checking...</div>
+            <div>
+                <div class="session-title">🔐 Session Status</div>
+                <div class="session-status" id="sessionStatus">Checking...</div>
+            </div>
+            <button class="session-btn" id="cookieBtn">🍪 Set Cookie</button>
         </div>
 
         <div class="stats-grid">
-            <div class="stat-card"><div class="stat-value" id="totalCentres">0</div><div class="stat-label">Monitored</div></div>
-            <div class="stat-card"><div class="stat-value" id="centresWithSlots">0</div><div class="stat-label">With Slots</div></div>
-            <div class="stat-card"><div class="stat-value" id="totalSlots">0</div><div class="stat-label">Total Slots</div></div>
-            <div class="stat-card"><div class="stat-value" id="lastScan">--</div><div class="stat-label">Last Scan</div></div>
+            <div class="stat-card">
+                <div class="stat-value" id="totalCentres">0</div>
+                <div class="stat-label">Monitored Centres</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="centresWithSlots">0</div>
+                <div class="stat-label">With Available Slots</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="totalSlots">0</div>
+                <div class="stat-label">Total Slots Found</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="lastScanTime">--</div>
+                <div class="stat-label">Last Scan</div>
+            </div>
         </div>
 
         <div class="controls">
             <button class="btn btn-primary" id="scanBtn">🔄 Scan All Centres</button>
             <button class="btn btn-secondary" id="refreshBtn">📊 Refresh</button>
-            <button class="btn btn-secondary" id="cookieBtn">🍪 Set Cookie</button>
         </div>
 
-        <div class="centres-grid" id="centresGrid">Loading...</div>
-        <div class="log-panel" id="logPanel">🟢 Ready. Click Scan All Centres.</div>
+        <div id="centresGrid" class="centres-grid">
+            <div class="loading">Loading centres...</div>
+        </div>
+
+        <div class="log-panel" id="logPanel">
+            <div>🟢 System ready. Click 'Scan All Centres' to start.</div>
+        </div>
     </div>
 
+    <!-- Cookie Modal -->
     <div id="cookieModal" class="modal">
         <div class="modal-content">
             <h3>🍪 Set Session Cookie</h3>
-            <p>1. Open DVSA site and login</p>
-            <p>2. Press F12 → Console → type: <code>document.cookie</code></p>
-            <p>3. Copy and paste below:</p>
+            <p>1️⃣ Open <a href="https://driverpracticaltest.dvsa.gov.uk/login" target="_blank">DVSA site</a> in another tab and <strong>LOGIN</strong></p>
+            <p>2️⃣ Press <strong>F12</strong> → <strong>Console</strong> tab</p>
+            <p>3️⃣ Type: <code>document.cookie</code> and press Enter</p>
+            <p>4️⃣ <strong>COPY</strong> the entire output</p>
+            <p>5️⃣ Paste below and click Submit:</p>
             <textarea id="cookieInput" placeholder="Paste document.cookie here..."></textarea>
-            <button class="btn btn-primary" id="submitCookieBtn">Submit</button>
-            <button class="btn btn-secondary" id="closeModalBtn">Cancel</button>
+            <div class="modal-buttons">
+                <button class="btn btn-primary" id="submitCookieBtn">Submit</button>
+                <button class="btn btn-secondary" id="closeModalBtn">Cancel</button>
+            </div>
         </div>
     </div>
 
     <script>
+        // API functions
         async function checkSession() {
             try {
-                const res = await fetch('/api/session-status');
+                const res = await fetch('/api/session');
                 const data = await res.json();
                 const card = document.getElementById('sessionCard');
                 const statusEl = document.getElementById('sessionStatus');
+                
                 if (data.active) {
                     card.className = 'session-card active';
-                    statusEl.innerHTML = '✅ Session Active - Proxy is connected';
+                    statusEl.innerHTML = '✅ Session Active - Ready to scan';
                 } else {
                     card.className = 'session-card inactive';
-                    statusEl.innerHTML = '⚠️ Session Inactive - Please set cookie';
+                    statusEl.innerHTML = '⚠️ Session Inactive - Please set your cookie';
                 }
-            } catch(e) { console.error(e); }
+                return data.active;
+            } catch(e) {
+                console.error('Session check failed');
+                return false;
+            }
         }
         
         async function loadStats() {
@@ -109,10 +397,12 @@
                     document.getElementById('centresWithSlots').textContent = data.stats.centresWithSlots;
                     document.getElementById('totalSlots').textContent = data.stats.totalSlots;
                     if (data.stats.lastScan) {
-                        document.getElementById('lastScan').textContent = new Date(data.stats.lastScan).toLocaleTimeString();
+                        document.getElementById('lastScanTime').textContent = new Date(data.stats.lastScan).toLocaleTimeString();
                     }
                 }
-            } catch(e) { console.error(e); }
+            } catch(e) {
+                console.error('Stats load failed');
+            }
         }
         
         async function loadCentres() {
@@ -120,13 +410,17 @@
                 const res = await fetch('/api/centres');
                 const data = await res.json();
                 if (!data.success) return;
+                
                 const grid = document.getElementById('centresGrid');
                 grid.innerHTML = '';
+                
                 data.data.forEach(centre => {
                     const status = centre.status;
                     const hasSlots = status?.hasSlots || false;
                     const slotCount = status?.slotCount || 0;
                     const dates = status?.availableDates || [];
+                    const lastChecked = status?.lastChecked;
+                    
                     const card = document.createElement('div');
                     card.className = `centre-card ${hasSlots ? 'has-slots' : ''}`;
                     card.innerHTML = `
@@ -138,70 +432,150 @@
                         </div>
                         <div class="centre-body">
                             <div class="centre-address">${centre.address}</div>
-                            ${dates.length ? `<div class="dates-list">${dates.slice(0,6).map(d => `<span class="date-chip">📅 ${d}</span>`).join('')}</div>` : ''}
+                            ${dates.length > 0 ? `
+                                <div class="dates-list">
+                                    ${dates.slice(0, 8).map(date => `
+                                        <span class="date-chip" onclick="window.open('https://driverpracticaltest.dvsa.gov.uk/booking?centreCode=${centre.code}', '_blank')">
+                                            📅 ${date}
+                                        </span>
+                                    `).join('')}
+                                </div>
+                            ` : '<div style="color:#999; font-size:12px;">No available dates at this time</div>'}
+                            ${lastChecked ? `<div class="last-check">Last checked: ${new Date(lastChecked).toLocaleTimeString()}</div>` : ''}
                         </div>
                     `;
                     grid.appendChild(card);
                 });
-            } catch(e) { console.error(e); }
+            } catch(e) {
+                console.error('Centres load failed');
+                document.getElementById('centresGrid').innerHTML = '<div class="loading">⚠️ Error loading centres. Make sure server is running.</div>';
+            }
         }
         
         async function loadHistory() {
             try {
                 const res = await fetch('/api/history');
                 const data = await res.json();
-                if (data.success && data.data.length) {
+                if (data.success && data.data.length > 0) {
                     const logPanel = document.getElementById('logPanel');
-                    logPanel.innerHTML = data.data.slice(0,10).map(h => 
-                        `<div>${new Date(h.timestamp).toLocaleTimeString()} - ${h.slotsFound > 0 ? '🎉 ' + h.slotsFound + ' centres have slots! ' + h.totalSlots + ' total slots' : '❌ No slots found'}</div>`
-                    ).join('');
+                    const latest = data.data.slice(0, 12);
+                    logPanel.innerHTML = latest.map(h => `
+                        <div class="log-entry ${h.slotsFound > 0 ? 'found' : ''}">
+                            [${new Date(h.timestamp).toLocaleTimeString()}] ${h.slotsFound > 0 ? '🎉 ' + h.slotsFound + ' centre(s) have slots! ' + h.totalSlots + ' total slots available 🎉' : '❌ No slots found'}
+                        </div>
+                    `).join('');
                 }
-            } catch(e) { console.error(e); }
+            } catch(e) {}
         }
         
         async function triggerScan() {
             const btn = document.getElementById('scanBtn');
+            const originalText = btn.textContent;
             btn.textContent = '🔄 Scanning...';
             btn.disabled = true;
+            
             try {
                 await fetch('/api/scan', { method: 'POST' });
-                setTimeout(() => { loadCentres(); loadStats(); loadHistory(); }, 8000);
-            } catch(e) {}
-            setTimeout(() => { btn.textContent = '🔄 Scan All Centres'; btn.disabled = false; }, 10000);
+                addLogEntry('Scan started, please wait...');
+                
+                setTimeout(() => {
+                    loadCentres();
+                    loadStats();
+                    loadHistory();
+                    addLogEntry('Scan completed');
+                }, 10000);
+            } catch(e) {
+                addLogEntry('❌ Error starting scan');
+            }
+            
+            setTimeout(() => {
+                btn.textContent = originalText;
+                btn.disabled = false;
+            }, 12000);
         }
         
-        function showModal() { document.getElementById('cookieModal').style.display = 'flex'; }
-        function closeModal() { document.getElementById('cookieModal').style.display = 'none'; }
+        function addLogEntry(message) {
+            const logPanel = document.getElementById('logPanel');
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            entry.innerHTML = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logPanel.insertBefore(entry, logPanel.firstChild);
+            if (logPanel.children.length > 30) {
+                logPanel.removeChild(logPanel.lastChild);
+            }
+        }
+        
+        function refreshAll() {
+            checkSession();
+            loadStats();
+            loadCentres();
+            loadHistory();
+        }
+        
+        // Cookie modal functions
+        function showModal() {
+            document.getElementById('cookieModal').style.display = 'flex';
+        }
+        
+        function closeModal() {
+            document.getElementById('cookieModal').style.display = 'none';
+        }
         
         async function submitCookie() {
             const cookie = document.getElementById('cookieInput').value.trim();
-            if (!cookie) { alert('Paste cookie first'); return; }
+            if (!cookie) {
+                alert('Please paste a cookie first');
+                return;
+            }
+            
             const btn = document.getElementById('submitCookieBtn');
             btn.textContent = 'Setting...';
+            btn.disabled = true;
+            
             try {
-                const res = await fetch('/api/set-cookie', {
+                const res = await fetch('/api/cookie', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ cookie: cookie })
                 });
                 const data = await res.json();
-                if (data.success) { alert('Cookie set!'); closeModal(); checkSession(); }
-                else { alert('Error: ' + (data.error || 'Unknown')); }
-            } catch(e) { alert('Error: ' + e.message); }
+                
+                if (data.success) {
+                    alert('✅ Cookie set successfully!');
+                    closeModal();
+                    setTimeout(() => checkSession(), 1000);
+                    addLogEntry('🍪 Session cookie updated');
+                } else {
+                    alert('Error: ' + (data.error || 'Unknown error'));
+                }
+            } catch(e) {
+                alert('Error: ' + e.message);
+            }
+            
             btn.textContent = 'Submit';
+            btn.disabled = false;
         }
         
+        // Event listeners
         document.getElementById('scanBtn').onclick = triggerScan;
-        document.getElementById('refreshBtn').onclick = () => { loadCentres(); loadStats(); loadHistory(); checkSession(); };
+        document.getElementById('refreshBtn').onclick = refreshAll;
         document.getElementById('cookieBtn').onclick = showModal;
         document.getElementById('submitCookieBtn').onclick = submitCookie;
         document.getElementById('closeModalBtn').onclick = closeModal;
         
-        checkSession();
-        loadStats();
-        loadCentres();
-        loadHistory();
-        setInterval(() => { loadStats(); loadCentres(); }, 30000);
+        // Close modal on outside click
+        window.onclick = (e) => {
+            const modal = document.getElementById('cookieModal');
+            if (e.target === modal) closeModal();
+        };
+        
+        // Initial load
+        refreshAll();
+        
+        // Auto refresh every 30 seconds
+        setInterval(refreshAll, 30000);
+        
+        console.log('DVSA Monitor Dashboard Ready');
     </script>
 </body>
 </html>
