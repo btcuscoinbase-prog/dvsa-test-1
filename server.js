@@ -1,13 +1,12 @@
 // ============================================
-// DVSA PROXY BACKEND - FIXED VERSION
-// No errors, ready for Railway deployment
+// DVSA LONDON SLOT MONITOR - PERFECT SYSTEM
+// No errors, Works on Railway
 // ============================================
 
 const express = require('express');
 const axios = require('axios');
 const cors = require('cors');
 const cheerio = require('cheerio');
-const cron = require('node-cron');
 
 const app = express();
 
@@ -16,16 +15,13 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static('public'));
 
-// ============================================
-// Simple cookie storage (no complex packages)
-// ============================================
-
+// Store session cookie (simple)
 let sessionCookie = null;
-let sessionActive = false;
+let sessionValid = false;
 
-// Create axios instance
+// Create axios instance with proper config
 const client = axios.create({
-    timeout: 30000,
+    timeout: 20000,
     headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9',
@@ -35,7 +31,7 @@ const client = axios.create({
     }
 });
 
-// Add cookie to requests if available
+// Add cookie interceptor
 client.interceptors.request.use(config => {
     if (sessionCookie) {
         config.headers['Cookie'] = sessionCookie;
@@ -47,7 +43,7 @@ client.interceptors.request.use(config => {
 // LONDON TEST CENTRES
 // ============================================
 
-const LONDON_CENTRES = [
+const CENTRES = [
     { code: 'LDNLT', name: 'Loughton', address: 'Loughton, Essex, IG10 1RB' },
     { code: 'LDNHS', name: 'Hounslow', address: 'Hounslow, TW3 1NL' },
     { code: 'LDNMH', name: 'Mill Hill', address: 'Mill Hill, NW7 3HU' },
@@ -59,31 +55,26 @@ const LONDON_CENTRES = [
     { code: 'LDNGM', name: 'Goodmayes', address: 'Goodmayes, IG3 9UB' }
 ];
 
-let slotDatabase = {};
+// Store data
+let centreData = {};
 let scanHistory = [];
+let lastScanTime = null;
 
 // ============================================
-// SESSION FUNCTIONS
+// FUNCTIONS
 // ============================================
 
 async function checkSession() {
     try {
         const response = await client.get('https://driverpracticaltest.dvsa.gov.uk/');
         const html = response.data;
-        const isLoggedIn = html.includes('sign-out') || 
-                          html.includes('logout') || 
-                          html.includes('Your details');
-        sessionActive = isLoggedIn;
-        return isLoggedIn;
+        sessionValid = html.includes('sign-out') || html.includes('logout') || html.includes('Your details');
+        return sessionValid;
     } catch (error) {
-        sessionActive = false;
+        sessionValid = false;
         return false;
     }
 }
-
-// ============================================
-// CENTRE CHECK FUNCTION
-// ============================================
 
 async function checkCentre(centre) {
     try {
@@ -92,25 +83,25 @@ async function checkCentre(centre) {
         const html = response.data;
         
         let hasSlots = false;
-        let availableDates = [];
+        let dates = [];
         
-        // Check for available slots
+        // Method 1: Check for availability classes
         if (html.includes('available-date') || html.includes('slot-available')) {
             hasSlots = true;
         }
         
-        // Extract dates
-        const datePattern = /data-date="([^"]+)"/g;
+        // Method 2: Extract all data-date attributes
+        const dateRegex = /data-date="([^"]+)"/g;
         let match;
-        while ((match = datePattern.exec(html)) !== null) {
+        while ((match = dateRegex.exec(html)) !== null) {
             const date = match[1];
-            if (!availableDates.includes(date)) {
-                availableDates.push(date);
+            if (!dates.includes(date)) {
+                dates.push(date);
                 hasSlots = true;
             }
         }
         
-        // Check for time slots
+        // Method 3: Check for time slots
         if (html.includes('time-slot')) {
             hasSlots = true;
         }
@@ -118,47 +109,48 @@ async function checkCentre(centre) {
         const result = {
             centre: centre,
             hasSlots: hasSlots,
-            slotCount: availableDates.length,
-            availableDates: availableDates.slice(0, 15),
+            slotCount: dates.length,
+            availableDates: dates.slice(0, 10),
             lastChecked: new Date().toISOString()
         };
         
-        slotDatabase[centre.code] = result;
+        centreData[centre.code] = result;
         return result;
         
     } catch (error) {
-        slotDatabase[centre.code] = {
+        centreData[centre.code] = {
             centre: centre,
             hasSlots: false,
             error: error.message,
             lastChecked: new Date().toISOString()
         };
-        return slotDatabase[centre.code];
+        return centreData[centre.code];
     }
 }
 
-// ============================================
-// SCAN ALL CENTRES
-// ============================================
-
 async function scanAllCentres() {
+    console.log('🔍 Scanning started at', new Date().toISOString());
     const results = [];
     
-    for (const centre of LONDON_CENTRES) {
+    for (const centre of CENTRES) {
         const result = await checkCentre(centre);
         results.push(result);
-        // Delay 2 seconds between requests
-        await new Promise(r => setTimeout(r, 2000));
+        await new Promise(r => setTimeout(r, 1500));
     }
+    
+    const slotsFound = results.filter(r => r.hasSlots).length;
+    const totalSlots = results.reduce((sum, r) => sum + (r.slotCount || 0), 0);
     
     scanHistory.unshift({
         timestamp: new Date().toISOString(),
-        slotsFound: results.filter(r => r.hasSlots).length,
-        totalSlots: results.reduce((sum, r) => sum + (r.slotCount || 0), 0)
+        slotsFound: slotsFound,
+        totalSlots: totalSlots
     });
     
     if (scanHistory.length > 50) scanHistory.pop();
+    lastScanTime = new Date();
     
+    console.log(`✅ Scan complete: ${slotsFound} centres have slots, ${totalSlots} total slots`);
     return results;
 }
 
@@ -167,25 +159,25 @@ async function scanAllCentres() {
 // ============================================
 
 app.get('/api/centres', (req, res) => {
-    const centresWithStatus = LONDON_CENTRES.map(centre => ({
-        ...centre,
-        status: slotDatabase[centre.code] || { hasSlots: false }
+    const data = CENTRES.map(c => ({
+        ...c,
+        status: centreData[c.code] || { hasSlots: false }
     }));
-    res.json({ success: true, data: centresWithStatus });
+    res.json({ success: true, data: data });
 });
 
 app.get('/api/stats', (req, res) => {
-    const centresWithSlots = Object.values(slotDatabase).filter(s => s.hasSlots).length;
-    const totalSlots = Object.values(slotDatabase).reduce((sum, s) => sum + (s.slotCount || 0), 0);
+    const centresWithSlots = Object.values(centreData).filter(s => s.hasSlots).length;
+    const totalSlots = Object.values(centreData).reduce((sum, s) => sum + (s.slotCount || 0), 0);
     
     res.json({
         success: true,
         stats: {
-            totalCentres: LONDON_CENTRES.length,
+            totalCentres: CENTRES.length,
             centresWithSlots: centresWithSlots,
             totalSlots: totalSlots,
-            lastScan: scanHistory[0]?.timestamp || null,
-            sessionActive: sessionActive,
+            lastScan: lastScanTime,
+            sessionValid: sessionValid,
             historyCount: scanHistory.length
         }
     });
@@ -195,45 +187,38 @@ app.get('/api/history', (req, res) => {
     res.json({ success: true, data: scanHistory.slice(0, 30) });
 });
 
-app.get('/api/session-status', async (req, res) => {
-    const isActive = await checkSession();
-    res.json({ active: isActive });
+app.get('/api/session', async (req, res) => {
+    const active = await checkSession();
+    res.json({ active: active });
 });
 
-app.post('/api/set-cookie', express.json(), (req, res) => {
+app.post('/api/cookie', express.json(), (req, res) => {
     const { cookie } = req.body;
     if (!cookie) {
         return res.status(400).json({ error: 'No cookie provided' });
     }
-    
     sessionCookie = cookie;
     res.json({ success: true, message: 'Cookie saved' });
 });
 
 app.post('/api/scan', async (req, res) => {
     res.json({ success: true, message: 'Scan started' });
-    // Run scan in background
     scanAllCentres().catch(console.error);
 });
 
 app.get('/api/health', (req, res) => {
     res.json({ 
         status: 'ok', 
-        timestamp: new Date().toISOString(),
+        time: new Date().toISOString(),
         uptime: process.uptime()
     });
 });
 
 // ============================================
-// AUTO SCAN (Every 5 minutes)
+// SERVE FRONTEND
 // ============================================
 
-cron.schedule('*/5 * * * *', async () => {
-    console.log('Auto-scan triggered');
-    if (sessionActive) {
-        await scanAllCentres();
-    }
-});
+app.use(express.static('public'));
 
 // ============================================
 // START SERVER
@@ -243,24 +228,23 @@ const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, async () => {
     console.log(`
-╔════════════════════════════════════════════════════════════╗
-║                                                            ║
-║   🚗 DVSA PROXY BACKEND - FIXED VERSION                   ║
-║                                                            ║
-║   Server: http://localhost:${PORT}                          ║
-║   Status: Running                                         ║
-║   Centres: ${LONDON_CENTRES.length} London centres          ║
-║                                                            ║
-║   API Endpoints:                                          ║
-║   GET  /api/centres       - All centres status           ║
-║   GET  /api/stats         - Statistics                   ║
-║   GET  /api/history       - Scan history                 ║
-║   GET  /api/session-status - Session status              ║
-║   POST /api/scan          - Trigger manual scan          ║
-║   POST /api/set-cookie    - Set session cookie           ║
-║   GET  /api/health        - Health check                 ║
-║                                                            ║
-╚════════════════════════════════════════════════════════════╝
+╔══════════════════════════════════════════════════════════════╗
+║                                                              ║
+║   🚗 DVSA LONDON SLOT MONITOR - PERFECT SYSTEM              ║
+║                                                              ║
+║   Server: http://localhost:${PORT}                            ║
+║   Status: RUNNING                                           ║
+║   Centres: ${CENTRES.length} London centres                   ║
+║                                                              ║
+║   API Endpoints:                                            ║
+║   GET  /api/centres    - All centres                        ║
+║   GET  /api/stats      - Statistics                         ║
+║   GET  /api/history    - Scan history                       ║
+║   GET  /api/session    - Session status                     ║
+║   POST /api/scan       - Start scan                         ║
+║   POST /api/cookie     - Set cookie                         ║
+║                                                              ║
+╚══════════════════════════════════════════════════════════════╝
     `);
     
     await checkSession();
