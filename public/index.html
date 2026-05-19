@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DVSA Proxy Monitor - London Slots</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: Arial, sans-serif; background: #f3f2f1; padding: 20px; }
+        .container { max-width: 1200px; margin: auto; }
+        .header { background: #005ea5; color: white; padding: 20px; border-radius: 12px; margin-bottom: 20px; text-align: center; }
+        .header h1 { font-size: 24px; margin-bottom: 5px; }
+        .session-card { background: white; border-radius: 12px; padding: 15px; margin-bottom: 20px; border-left: 4px solid; }
+        .session-card.active { border-left-color: #00703c; background: #e6f4ea; }
+        .session-card.inactive { border-left-color: #d4351c; background: #fce8e6; }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-bottom: 20px; }
+        .stat-card { background: white; border-radius: 12px; padding: 15px; text-align: center; }
+        .stat-value { font-size: 28px; font-weight: bold; color: #005ea5; }
+        .stat-label { font-size: 12px; color: #666; margin-top: 5px; }
+        .controls { display: flex; gap: 10px; justify-content: center; margin-bottom: 20px; flex-wrap: wrap; }
+        .btn { padding: 10px 20px; border: none; border-radius: 8px; font-size: 14px; font-weight: bold; cursor: pointer; }
+        .btn-primary { background: #00703c; color: white; }
+        .btn-secondary { background: #6f777b; color: white; }
+        .centres-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 15px; margin-bottom: 20px; }
+        .centre-card { background: white; border-radius: 12px; overflow: hidden; }
+        .centre-card.has-slots { border-left: 4px solid #00703c; }
+        .centre-header { padding: 15px; background: #f8f9fa; display: flex; justify-content: space-between; }
+        .centre-name { font-weight: bold; }
+        .slot-badge { padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: bold; }
+        .slot-badge.available { background: #00703c; color: white; }
+        .slot-badge.unavailable { background: #6f777b; color: white; }
+        .centre-body { padding: 15px; }
+        .centre-address { font-size: 12px; color: #666; margin-bottom: 10px; }
+        .dates-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+        .date-chip { background: #e6f4ea; color: #00703c; padding: 4px 10px; border-radius: 15px; font-size: 11px; }
+        .log-panel { background: #1a1a2e; color: #0f0; font-family: monospace; font-size: 11px; padding: 15px; border-radius: 12px; max-height: 150px; overflow-y: auto; }
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center; }
+        .modal-content { background: white; border-radius: 12px; padding: 20px; max-width: 500px; width: 90%; }
+        .modal textarea { width: 100%; height: 80px; margin: 15px 0; padding: 10px; font-family: monospace; }
+        @media (max-width: 700px) {
+            .centres-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚗 DVSA Proxy Monitor - London Slots</h1>
+            <p>Real session management | Auto-scan every 5 minutes</p>
+        </div>
+
+        <div class="session-card inactive" id="sessionCard">
+            <div class="session-title">🔐 Session Status</div>
+            <div class="session-status" id="sessionStatus">Checking...</div>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card"><div class="stat-value" id="totalCentres">0</div><div class="stat-label">Monitored</div></div>
+            <div class="stat-card"><div class="stat-value" id="centresWithSlots">0</div><div class="stat-label">With Slots</div></div>
+            <div class="stat-card"><div class="stat-value" id="totalSlots">0</div><div class="stat-label">Total Slots</div></div>
+            <div class="stat-card"><div class="stat-value" id="lastScan">--</div><div class="stat-label">Last Scan</div></div>
+        </div>
+
+        <div class="controls">
+            <button class="btn btn-primary" id="scanBtn">🔄 Scan All Centres</button>
+            <button class="btn btn-secondary" id="refreshBtn">📊 Refresh</button>
+            <button class="btn btn-secondary" id="cookieBtn">🍪 Set Cookie</button>
+        </div>
+
+        <div class="centres-grid" id="centresGrid">Loading...</div>
+        <div class="log-panel" id="logPanel">🟢 Ready. Click Scan All Centres.</div>
+    </div>
+
+    <div id="cookieModal" class="modal">
+        <div class="modal-content">
+            <h3>🍪 Set Session Cookie</h3>
+            <p>1. Open DVSA site and login</p>
+            <p>2. Press F12 → Console → type: <code>document.cookie</code></p>
+            <p>3. Copy and paste below:</p>
+            <textarea id="cookieInput" placeholder="Paste document.cookie here..."></textarea>
+            <button class="btn btn-primary" id="submitCookieBtn">Submit</button>
+            <button class="btn btn-secondary" id="closeModalBtn">Cancel</button>
+        </div>
+    </div>
+
+    <script>
+        async function checkSession() {
+            try {
+                const res = await fetch('/api/session-status');
+                const data = await res.json();
+                const card = document.getElementById('sessionCard');
+                const statusEl = document.getElementById('sessionStatus');
+                if (data.active) {
+                    card.className = 'session-card active';
+                    statusEl.innerHTML = '✅ Session Active - Proxy is connected';
+                } else {
+                    card.className = 'session-card inactive';
+                    statusEl.innerHTML = '⚠️ Session Inactive - Please set cookie';
+                }
+            } catch(e) { console.error(e); }
+        }
+        
+        async function loadStats() {
+            try {
+                const res = await fetch('/api/stats');
+                const data = await res.json();
+                if (data.success) {
+                    document.getElementById('totalCentres').textContent = data.stats.totalCentres;
+                    document.getElementById('centresWithSlots').textContent = data.stats.centresWithSlots;
+                    document.getElementById('totalSlots').textContent = data.stats.totalSlots;
+                    if (data.stats.lastScan) {
+                        document.getElementById('lastScan').textContent = new Date(data.stats.lastScan).toLocaleTimeString();
+                    }
+                }
+            } catch(e) { console.error(e); }
+        }
+        
+        async function loadCentres() {
+            try {
+                const res = await fetch('/api/centres');
+                const data = await res.json();
+                if (!data.success) return;
+                const grid = document.getElementById('centresGrid');
+                grid.innerHTML = '';
+                data.data.forEach(centre => {
+                    const status = centre.status;
+                    const hasSlots = status?.hasSlots || false;
+                    const slotCount = status?.slotCount || 0;
+                    const dates = status?.availableDates || [];
+                    const card = document.createElement('div');
+                    card.className = `centre-card ${hasSlots ? 'has-slots' : ''}`;
+                    card.innerHTML = `
+                        <div class="centre-header">
+                            <span class="centre-name">📍 ${centre.name}</span>
+                            <span class="slot-badge ${hasSlots ? 'available' : 'unavailable'}">
+                                ${hasSlots ? `✅ ${slotCount} slots` : '❌ No slots'}
+                            </span>
+                        </div>
+                        <div class="centre-body">
+                            <div class="centre-address">${centre.address}</div>
+                            ${dates.length ? `<div class="dates-list">${dates.slice(0,6).map(d => `<span class="date-chip">📅 ${d}</span>`).join('')}</div>` : ''}
+                        </div>
+                    `;
+                    grid.appendChild(card);
+                });
+            } catch(e) { console.error(e); }
+        }
+        
+        async function loadHistory() {
+            try {
+                const res = await fetch('/api/history');
+                const data = await res.json();
+                if (data.success && data.data.length) {
+                    const logPanel = document.getElementById('logPanel');
+                    logPanel.innerHTML = data.data.slice(0,10).map(h => 
+                        `<div>${new Date(h.timestamp).toLocaleTimeString()} - ${h.slotsFound > 0 ? '🎉 ' + h.slotsFound + ' centres have slots! ' + h.totalSlots + ' total slots' : '❌ No slots found'}</div>`
+                    ).join('');
+                }
+            } catch(e) { console.error(e); }
+        }
+        
+        async function triggerScan() {
+            const btn = document.getElementById('scanBtn');
+            btn.textContent = '🔄 Scanning...';
+            btn.disabled = true;
+            try {
+                await fetch('/api/scan', { method: 'POST' });
+                setTimeout(() => { loadCentres(); loadStats(); loadHistory(); }, 8000);
+            } catch(e) {}
+            setTimeout(() => { btn.textContent = '🔄 Scan All Centres'; btn.disabled = false; }, 10000);
+        }
+        
+        function showModal() { document.getElementById('cookieModal').style.display = 'flex'; }
+        function closeModal() { document.getElementById('cookieModal').style.display = 'none'; }
+        
+        async function submitCookie() {
+            const cookie = document.getElementById('cookieInput').value.trim();
+            if (!cookie) { alert('Paste cookie first'); return; }
+            const btn = document.getElementById('submitCookieBtn');
+            btn.textContent = 'Setting...';
+            try {
+                const res = await fetch('/api/set-cookie', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ cookie: cookie })
+                });
+                const data = await res.json();
+                if (data.success) { alert('Cookie set!'); closeModal(); checkSession(); }
+                else { alert('Error: ' + (data.error || 'Unknown')); }
+            } catch(e) { alert('Error: ' + e.message); }
+            btn.textContent = 'Submit';
+        }
+        
+        document.getElementById('scanBtn').onclick = triggerScan;
+        document.getElementById('refreshBtn').onclick = () => { loadCentres(); loadStats(); loadHistory(); checkSession(); };
+        document.getElementById('cookieBtn').onclick = showModal;
+        document.getElementById('submitCookieBtn').onclick = submitCookie;
+        document.getElementById('closeModalBtn').onclick = closeModal;
+        
+        checkSession();
+        loadStats();
+        loadCentres();
+        loadHistory();
+        setInterval(() => { loadStats(); loadCentres(); }, 30000);
+    </script>
+</body>
+</html>
